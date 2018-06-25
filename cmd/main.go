@@ -4,10 +4,11 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
-	"github.com/nlopes/slack"
+	slackLib "github.com/nlopes/slack"
 	"github.com/yuki-eto/5ch-slack-bot/dao"
 	"github.com/yuki-eto/5ch-slack-bot/entity"
 	"github.com/yuki-eto/5ch-slack-bot/infra"
@@ -22,13 +23,23 @@ type Slack struct {
 var (
 	threadListURL = os.Getenv("THREAD_LIST_URL")
 	threadBaseURL = os.Getenv("THREAD_BASE_URL")
-	rtm           *slack.RTM
+	slack           *infra.Slack
+	threadDao       dao.Thread
+	articleDao      dao.Article
 )
 
 func main() {
 	log.Println("daemon started!")
-	rtm = infra.NewSlackRTM()
-	go handlingRTM(rtm)
+	slack = infra.NewSlack()
+	go slack.HandleAction()
+	go func () {
+		for action := range slack.Actions {
+			handleMessageAction(action)
+		}
+	}()
+
+	threadDao = dao.NewThread()
+	articleDao = dao.NewArticle()
 
 	for {
 		log.Println("reload borad threads...")
@@ -50,24 +61,21 @@ func mainLoop() {
 		var lines []string
 		lines = append(lines, fmt.Sprintf("%s (%d)", t.Title, t.LastReadArticleID))
 		lines = append(lines, fmt.Sprintf("%s%d/", threadBaseURL, t.ThreadID))
-		sendSlack(strings.Join(lines, "\n"))
+		slack.SendMessage(strings.Join(lines, "\n"))
 		for _, a := range t.Articles {
-			var lines []string
-			lines = append(lines, "```")
-			lines = append(lines, fmt.Sprintf("%d: %s %v UID:%s", a.ArticleID, a.Name, a.WroteAt, a.UID))
-			lines = append(lines, a.Text)
-			lines = append(lines, "```")
-
-			sendSlack(strings.Join(lines, "\n"))
+			slack.SendMessage(formatArticle(a))
 			time.Sleep(1 * time.Second)
 		}
 	}
 }
 
-func sendSlack(text string) {
-	channel := os.Getenv("SLACK_CHANNEL")
-	msg := rtm.NewOutgoingMessage(text, channel)
-	rtm.SendMessage(msg)
+func formatArticle(a *entity.Article) string {
+	var lines []string
+	lines = append(lines, "```")
+	lines = append(lines, fmt.Sprintf("%d %d: %s %v UID:%s", a.ThreadID, a.ArticleID, a.Name, a.WroteAt, a.UID))
+	lines = append(lines, a.Text)
+	lines = append(lines, "```")
+	return strings.Join(lines, "\n")
 }
 
 func loadThreadArticles() *entity.Threads {
@@ -85,8 +93,6 @@ func loadThreadArticles() *entity.Threads {
 		return strings.Contains(t.Title, os.Getenv("THREAD_NAME_CONTAINS"))
 	})
 
-	threadDao := dao.NewThread()
-	articleDao := dao.NewArticle()
 	newThreads := entity.NewThreads()
 	for _, thread := range board.Threads.List {
 		newThread := entity.NewThread(thread)
@@ -163,15 +169,33 @@ func loadThreadArticles() *entity.Threads {
 	return newThreads
 }
 
-func handlingRTM(rtm *slack.RTM) {
-	for msg := range rtm.IncomingEvents {
-		switch ev := msg.Data.(type) {
-		case *slack.LatencyReport:
-			fmt.Printf("Current Latency: %v\n", ev.Value)
-		case *slack.RTMError:
-			fmt.Printf("Error: %s\n", ev.Error())
-		case *slack.InvalidAuthEvent:
-			fmt.Println("Invalid credentials")
+func handleMessageAction(ev *slackLib.MessageEvent) {
+	if !strings.HasPrefix(ev.Msg.Text, fmt.Sprintf("<@%s> ", os.Getenv("SLACK_BOT_ID"))) {
+		return
+	}
+	messages := strings.Split(strings.TrimSpace(ev.Msg.Text), " ")[1:]
+	if len(messages) == 0 {
+		return
+	}
+	keyword := messages[0]
+
+	switch keyword {
+	case "article":
+		threadID, err := strconv.ParseUint(messages[1], 10, 64)
+		if err != nil {
+			slack.SendMessage(fmt.Sprintf("!!error!!\n%v\n", err))
+			return
 		}
+		articleID, err := strconv.ParseUint(messages[2], 10, 32)
+		if err != nil {
+			slack.SendMessage(fmt.Sprintf("!!error!!\n%v\n", err))
+			return
+		}
+		article, err := articleDao.Select(threadID, uint32(articleID))
+		if err != nil {
+			slack.SendMessage(fmt.Sprintf("!!error!!\n%v\n", err))
+			return
+		}
+		slack.SendMessage(formatArticle(article))
 	}
 }
