@@ -31,8 +31,6 @@ func (p *Slack) HandleAction() {
 	rtm := p.rtm
 	for msg := range rtm.IncomingEvents {
 		switch ev := msg.Data.(type) {
-		case *slack.LatencyReport:
-			log.Printf("Current Latency: %v\n", ev.Value)
 		case *slack.RTMError:
 			log.Printf("Error: %s\n", ev.Error())
 		case *slack.InvalidAuthEvent:

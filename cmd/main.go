@@ -59,7 +59,7 @@ func mainLoop() {
 		}
 
 		var lines []string
-		lines = append(lines, fmt.Sprintf("%s (%d)", t.Title, t.LastReadArticleID))
+		lines = append(lines, fmt.Sprintf("%d: %s (%d)", t.ThreadID, t.Title, t.LastReadArticleID))
 		lines = append(lines, fmt.Sprintf("%s%d/", threadBaseURL, t.ThreadID))
 		slack.SendMessage(strings.Join(lines, "\n"))
 		for _, a := range t.Articles {
@@ -75,6 +75,7 @@ func formatArticle(a *entity.Article) string {
 	lines = append(lines, fmt.Sprintf("%d %d: %s %v UID:%s", a.ThreadID, a.ArticleID, a.Name, a.WroteAt, a.UID))
 	lines = append(lines, a.Text)
 	lines = append(lines, "```")
+	lines = append(lines, fmt.Sprintf("%s%d/%d", threadBaseURL, a.ThreadID, a.ArticleID))
 	return strings.Join(lines, "\n")
 }
 
@@ -143,7 +144,10 @@ func loadThreadArticles() *entity.Threads {
 			}
 			newArticle := entity.NewArticle(thread.ID, article)
 			if _, err := articleDao.Insert(newArticle); err != nil {
-				log.Fatalf("%+v\n", err)
+				log.Printf("%+v\n", err)
+				if !strings.Contains(err.Error(), "UNIQUE") {
+					panic(err)
+				}
 			}
 			newArticles.Append(newArticle)
 		}
@@ -151,10 +155,10 @@ func loadThreadArticles() *entity.Threads {
 
 		if hasOldThread {
 			oldThread.ReplaceByCurrentThread(thread)
+			newThreads.Append(oldThread)
 			if _, err := threadDao.Update(oldThread); err != nil {
 				panic(err)
 			}
-			newThreads.Append(oldThread)
 		} else {
 			newThread := newThreads.Get(id)
 			newThread.ReplaceByCurrentThread(thread)
@@ -183,17 +187,17 @@ func handleMessageAction(ev *slackLib.MessageEvent) {
 	case "article":
 		threadID, err := strconv.ParseUint(messages[1], 10, 64)
 		if err != nil {
-			slack.SendMessage(fmt.Sprintf("!!error!!\n%v\n", err))
+			slack.SendMessage(fmt.Sprintf("> [error] %v\n", err))
 			return
 		}
 		articleID, err := strconv.ParseUint(messages[2], 10, 32)
 		if err != nil {
-			slack.SendMessage(fmt.Sprintf("!!error!!\n%v\n", err))
+			slack.SendMessage(fmt.Sprintf("> [error] %v\n", err))
 			return
 		}
 		article, err := articleDao.Select(threadID, uint32(articleID))
 		if err != nil {
-			slack.SendMessage(fmt.Sprintf("!!error!!\n%v\n", err))
+			slack.SendMessage(fmt.Sprintf("> [error] %v\n", err))
 			return
 		}
 		slack.SendMessage(formatArticle(article))
