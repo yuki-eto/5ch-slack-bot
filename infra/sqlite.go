@@ -2,10 +2,10 @@ package infra
 
 import (
 	"database/sql"
-	"os"
 	"path"
 
 	_ "github.com/mattn/go-sqlite3"
+	"github.com/yuki-eto/5ch-slack-bot/config"
 )
 
 var dbMap map[string]*sql.DB
@@ -19,8 +19,8 @@ func NewSqliteDB(dbName string) (*sql.DB, error) {
 		return dbMap[dbName], nil
 	}
 
-	dbPath := os.Getenv("DATABASE_PATH")
-	dbFilePath := path.Join(dbPath, dbName+".db")
+	cfg := config.GetEnvConfig()
+	dbFilePath := path.Join(cfg.DatabasePath, dbName + ".db")
 	db, err := sql.Open("sqlite3", dbFilePath)
 	if err != nil {
 		return nil, err

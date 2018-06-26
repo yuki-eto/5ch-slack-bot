@@ -5,6 +5,9 @@ import (
 	"time"
 
 	"github.com/yuki-eto/pot-collector"
+	"fmt"
+	"strings"
+	"github.com/yuki-eto/5ch-slack-bot/config"
 )
 
 type Article struct {
@@ -46,6 +49,17 @@ func (p *Article) SetAnchorArticleIDs(ids []uint32) error {
 	}
 	p.AnchorArticleIDsStr = string(bytes)
 	return nil
+}
+
+func (p *Article) FormatString() string {
+	var lines []string
+	lines = append(lines, "```")
+	lines = append(lines, fmt.Sprintf("%d %d: %s %v UID:%s", p.ThreadID, p.ArticleID, p.Name, p.WroteAt, p.UID))
+	lines = append(lines, p.Text)
+	lines = append(lines, "```")
+	cfg := config.GetEnvConfig()
+	lines = append(lines, fmt.Sprintf("%s%d/%d", cfg.ThreadBaseURL, p.ThreadID, p.ArticleID))
+	return strings.Join(lines, "\n")
 }
 
 type Articles struct {
