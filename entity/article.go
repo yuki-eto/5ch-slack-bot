@@ -54,7 +54,7 @@ func (p *Article) SetAnchorArticleIDs(ids []uint32) error {
 func (p *Article) FormatString() string {
 	var lines []string
 	lines = append(lines, "```")
-	lines = append(lines, fmt.Sprintf("%d %d: %s %v UID:%s", p.ThreadID, p.ArticleID, p.Name, p.WroteAt, p.UID))
+	lines = append(lines, fmt.Sprintf("%d: %s %v UID:%s", p.ArticleID, p.Name, p.WroteAt, p.UID))
 	lines = append(lines, p.Text)
 	lines = append(lines, "```")
 	cfg := config.GetEnvConfig()

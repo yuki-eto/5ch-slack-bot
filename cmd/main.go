@@ -45,7 +45,7 @@ func mainLoop() {
 		}
 
 		var lines []string
-		lines = append(lines, fmt.Sprintf("updated! %d: %s (%d)", t.ThreadID, t.Title, t.LastReadArticleID))
+		lines = append(lines, fmt.Sprintf("%d: %s (%d)", t.ThreadID, t.Title, t.LastReadArticleID))
 		text := strings.Join(lines, "\n")
 		log.Println(text)
 		slackService.SendMessage(text)
