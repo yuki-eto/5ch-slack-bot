@@ -2,4 +2,4 @@
 
 source .env
 export $(cut -d= -f1 .env)
-go run cmd/main.go
+./5ch_slack_bot
